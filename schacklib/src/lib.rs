@@ -1,14 +1,15 @@
 #[allow(dead_code)]
-pub mod errors;
-pub mod game;
-pub mod piece;
-mod team;
-mod movement_behavior;
-mod position;
+mod board;
+mod fen_parser;
+mod game;
+mod move_offset;
+mod piece;
+mod player;
+mod square;
 
 #[cfg(test)]
 mod tests {
-    use crate::game::Game;
+    use crate::{game::Game, square::Square};
 
     #[test]
     fn it_works() {
@@ -16,10 +17,8 @@ mod tests {
     }
 
     #[test]
-    fn game_init() {
-        let mut game = Game::new("Player 1".to_string(), "Player 2".to_string());
-        game.init();
-
-        dbg!(game);
+    fn create_piece() {
+        let mut game: Game = Game::new("Player 1".to_string(), "Player 2".to_string());
+        game.initialize();
     }
 }

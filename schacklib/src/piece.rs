@@ -1,62 +1,116 @@
-use crate::position::Position;
-use crate::movement_behavior::MovementBehavior;
-use crate::team::TeamColor;
+use bitflags::bitflags;
 
-#[derive(Debug, Clone)]
-pub struct Piece {
-    pub id: u16,
-    pub rank: PieceType,
-    pub team: TeamColor,
-    pub is_first_move: bool,
-    position: Position,
-    is_pinned: bool,
+// Bit implementation: https://www.chessprogramming.org/General_Setwise_Operations
+
+bitflags! {}
+
+pub(crate) enum Piece {
+    None = 0,   // 00000
+    Pawn = 1,   // 00001
+    Rook = 2,   // 00010
+    Knight = 3, // 00011
+    Bishop = 4, // 00100
+    Queen = 5,  // 00101
+    King = 6,   // 00110
+    White = 8,  // 01000
+    Black = 16, // 10000
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum PieceType {
-    KING,
-    QUEEN,
-    ROOK,
-    BISHOP,
-    KNIGHT,
-    PAWN,
+/*
+    Examples:
+        Pawn | White = 00001 | 01000 = 01001 => "White Pawn"
+        King | Black = 00110 | 10000 = 10110 => "Black King"
+*/
+
+impl Default for Piece {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 impl Piece {
-    pub fn get_position(&self) -> &Position {
-        &self.position
+    const WHITE_MASK: i8 = 8;
+    const BLACK_MASK: i8 = 16;
+    const COLOR_MASK: i8 = 8 | 16;
+
+    pub fn none() -> i8 {
+        Piece::None as i8
     }
 
-    pub fn set_position(&mut self, pos: Position) {
-        self.position = pos;
-    }
-
-    pub fn get_pinned(&self) -> bool {
-        self.is_pinned
-    }
-
-    pub fn new(id: u16, rank: PieceType, team: TeamColor, position: Position) -> Piece {
-        Self {
-            id,
-            rank,
-            team,
-            position,
-            is_first_move: true,
-            is_pinned: false
+    pub fn pawn(is_white: bool) -> i8 {
+        if is_white {
+            Piece::Pawn as i8 | Piece::White as i8
+        } else {
+            Piece::Pawn as i8 | Piece::Black as i8
         }
     }
 
-    pub fn calculate_possible_moves(&self, pieces: &Vec<Piece>) -> Vec<(Position, bool)> {
-        if self.get_pinned() {
-            return vec!();
+    pub fn rook(is_white: bool) -> i8 {
+        if is_white {
+            Piece::Rook as i8 | Piece::White as i8
+        } else {
+            Piece::Rook as i8 | Piece::Black as i8
         }
-        match &self.rank {
-            PieceType::KING => MovementBehavior::king(&self),
-            PieceType::QUEEN => MovementBehavior::queen(&self),
-            PieceType::ROOK => MovementBehavior::rook(&self),
-            PieceType::BISHOP => MovementBehavior::bishop(&self),
-            PieceType::KNIGHT => MovementBehavior::knight(&self),
-            PieceType::PAWN => MovementBehavior::pawn(&self, pieces),
+    }
+
+    pub fn knight(is_white: bool) -> i8 {
+        if is_white {
+            Piece::Knight as i8 | Piece::White as i8
+        } else {
+            Piece::Knight as i8 | Piece::Black as i8
         }
+    }
+
+    pub fn bishop(is_white: bool) -> i8 {
+        if is_white {
+            Piece::Bishop as i8 | Piece::White as i8
+        } else {
+            Piece::Bishop as i8 | Piece::Black as i8
+        }
+    }
+
+    pub fn queen(is_white: bool) -> i8 {
+        if is_white {
+            Piece::Queen as i8 | Piece::White as i8
+        } else {
+            Piece::Queen as i8 | Piece::Black as i8
+        }
+    }
+
+    pub fn king(is_white: bool) -> i8 {
+        if is_white {
+            Piece::King as i8 | Piece::White as i8
+        } else {
+            Piece::King as i8 | Piece::Black as i8
+        }
+    }
+
+    pub fn white() -> i8 {
+        Piece::White as i8
+    }
+
+    pub fn black() -> i8 {
+        Piece::Black as i8
+    }
+
+    pub fn get_color(piece: i8) -> i8 {
+        piece & Piece::COLOR_MASK
+    }
+
+    pub fn get_opponent_color(piece: i8) -> i8 {
+        Self::bit_swap(piece & Piece::COLOR_MASK, 3, 4)
+    }
+
+    pub fn cmp_color(piece1: i8, color: i8) -> bool {
+        piece1 & Piece::COLOR_MASK == color
+    }
+
+    // https://www.geeksforgeeks.org/how-to-swap-two-bits-in-a-given-integer/
+    fn bit_swap(n: i8, p1: i8, p2: i8) -> i8 {
+        let bit1: i8 = (&n >> p1) & 1;
+        let bit2: i8 = (&n >> p2) & 1;
+        let xor: i8 = bit1 ^ bit2;
+
+        n ^ ((xor << p1) | (xor << p2))
     }
 }
