@@ -6,12 +6,12 @@ bitflags! {}
 
 pub(crate) enum Piece {
     None = 0,   // 00000
-    Pawn = 1,   // 00001
-    Rook = 2,   // 00010
-    Knight = 3, // 00011
-    Bishop = 4, // 00100
-    Queen = 5,  // 00101
-    King = 6,   // 00110
+    Pawn = 1,   // 00001  --> MOVES
+    Rook = 2,   // 00010  --> MOVES
+    Knight = 3, // 00011  --> KLAR
+    Bishop = 4, // 00100  --> KLAR
+    Queen = 5,  // 00101  --> KLAR
+    King = 6,   // 00110  --> MOVES
     White = 8,  // 01000
     Black = 16, // 10000
 }

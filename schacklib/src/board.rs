@@ -1,7 +1,6 @@
 use crate::fen_parser::FenParser;
 use crate::move_offset::MoveOffset;
 use crate::piece::Piece;
-use crate::square;
 use crate::square::Square;
 use arr_macro::arr;
 use std::cmp;
@@ -10,7 +9,10 @@ use std::vec;
 #[derive(Debug)]
 pub(crate) struct Board {
     pub squares: [i8; 64],
-    pub pre_calc_edge: [Vec<i8>; 64],
+    pre_calc_edge: [Vec<i8>; 64],
+    white_attack_map: u64,
+    black_attack_map: u64,
+    king_moved: [bool; 2],
 }
 
 //Public usable functions
@@ -19,13 +21,16 @@ impl Board {
         Self {
             squares: [0; 64],
             pre_calc_edge: arr![Vec::new(); 64],
+            white_attack_map: 0,
+            black_attack_map: 0,
+            king_moved: [false, false],
         }
     }
 
     pub fn init(&mut self) {
         self.calulate_edges();
 
-        // Starting piece
+        // Starting pieces
         self.squares = FenParser::decode(FenParser::STARTING_POSITION.to_string());
 
         dbg!(&self.squares);
@@ -55,10 +60,14 @@ impl Board {
 
     pub(crate) fn _reset(&mut self) {
         self.squares = [0; 64];
+        self.pre_calc_edge = arr![Vec::new(); 64];
+        self.white_attack_map = 0;
+        self.black_attack_map = 0;
+        self.king_moved = [false, false];
     }
 }
 
-//Movement Logic
+//Movement Logic - Private functions
 impl Board {
     fn calulate_edges(&mut self) {
         for file in 0..8 {
@@ -83,7 +92,36 @@ impl Board {
         }
     }
 
-    pub fn straight_moves(&self, square: Square) -> Vec<i8> {
+    fn calculate_all_moves(&mut self) {
+        self.white_attack_map = 0;
+        self.black_attack_map = 0;
+        for i in 0..64 {
+            let sq: Square = Square::from_i8(i);
+            self.calculate_moves(sq);
+        }
+    }
+
+    fn add_danger(&mut self, sq: i8, c: i8) {
+        if c == Piece::white() {
+            if !Self::get_bit(self.white_attack_map, sq) {
+                self.white_attack_map += 2i8.pow(sq as u32) as u64;
+            }
+        } else {
+            if !Self::get_bit(self.black_attack_map, sq) {
+                self.black_attack_map += 2i8.pow(sq as u32) as u64;
+            }
+        }
+    }
+
+    fn get_bit(num: u64, i: i8) -> bool {
+        if i < 64 {
+            return num & (1 << i) != 0;
+        }
+
+        false
+    }
+
+    fn straight_moves(&mut self, square: Square) -> Vec<i8> {
         let mut moves: Vec<i8> = vec![];
         let piece = self.get(square);
         let color = Piece::get_color(piece);
@@ -95,8 +133,10 @@ impl Board {
                 let sq = square.to_i8() + dir * (pos + 1);
                 let p_sq = self.squares[sq as usize];
 
+                self.add_danger(sq, color);
                 if Piece::cmp_color(p_sq, color) {
                     //Team piece -> Can't move further
+
                     break;
                 }
 
@@ -111,7 +151,7 @@ impl Board {
         moves
     }
 
-    pub fn askew_moves(&self, square: Square) -> Vec<i8> {
+    fn askew_moves(&mut self, square: Square) -> Vec<i8> {
         let mut moves: Vec<i8> = vec![];
         let piece = self.get(square);
         let color = Piece::get_color(piece);
@@ -123,6 +163,7 @@ impl Board {
                 let sq = square.to_i8() + dir * (pos + 1);
                 let p_sq = self.squares[sq as usize];
 
+                self.add_danger(sq, color);
                 if Piece::cmp_color(p_sq, color) {
                     //Team piece -> Can't move further
                     break;
@@ -139,30 +180,79 @@ impl Board {
         moves
     }
 
-    fn pawn(&self, square: Square) -> Vec<i8> {
+    fn knight_moves(&mut self, square: Square) -> Vec<i8> {
+        let mut moves: Vec<i8> = vec![];
+        let piece = self.get(square);
+        let color = Piece::get_color(piece);
+
+        for pos in MoveOffset::KNIGHT {
+            let sq = square.to_i8() + pos;
+            if Square::from_i8(sq).is_outside() {
+                continue;
+            }
+            let p_sq = self.squares[sq as usize];
+
+            self.add_danger(sq, color);
+            if Piece::cmp_color(p_sq, color) {
+                //Team piece -> Can't move further
+                continue;
+            }
+
+            moves.push(sq);
+        }
+
+        moves
+    }
+
+    fn king_moves(&mut self, square: Square) -> Vec<i8> {
+        let mut moves: Vec<i8> = vec![];
+        let piece = self.get(square);
+        let color = Piece::get_color(piece);
+        let opponent_color = Piece::get_opponent_color(piece);
+
+        for pos in MoveOffset::STRAIGHT.iter().chain(MoveOffset::ASKEW.iter()) {
+            let sq = square.to_i8() + pos;
+            if Square::from_i8(sq).is_outside() {
+                continue;
+            }
+            let p_sq = self.squares[sq as usize];
+
+            self.add_danger(sq, color);
+            if Piece::cmp_color(p_sq, color) {
+                //Team piece -> Can't move further
+                continue;
+            }
+
+            moves.push(sq);
+        }
+
+        moves
+    }
+
+    fn pawn(&mut self, square: Square) -> Vec<i8> {
         unimplemented!()
     }
 
-    fn rook(&self, square: Square) -> Vec<i8> {
+    fn rook(&mut self, square: Square) -> Vec<i8> {
         self.straight_moves(square)
     }
 
-    fn knight(&self, square: Square) -> Vec<i8> {
-        unimplemented!()
+    fn knight(&mut self, square: Square) -> Vec<i8> {
+        self.knight_moves(square)
     }
 
-    fn bishop(&self, square: Square) -> Vec<i8> {
+    fn bishop(&mut self, square: Square) -> Vec<i8> {
         self.askew_moves(square)
     }
 
-    fn queen(&self, square: Square) -> Vec<i8> {
-        let mut a = self.straight_moves(square);
-        a.append(&mut self.askew_moves(square));
+    fn queen(&mut self, square: Square) -> Vec<i8> {
+        let mut moves = self.straight_moves(square);
+        moves.append(&mut self.askew_moves(square));
 
-        a
+        moves
     }
 
-    fn king(&self, square: Square) -> Vec<i8> {
-        unimplemented!()
+    fn king(&mut self, square: Square) -> Vec<i8> {
+        self.king_moves(square)
     }
 }

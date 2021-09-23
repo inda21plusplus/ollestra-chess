@@ -6,6 +6,7 @@ mod move_offset;
 mod piece;
 mod player;
 mod square;
+mod square_field;
 
 #[cfg(test)]
 mod tests {
@@ -20,5 +21,7 @@ mod tests {
     fn create_piece() {
         let mut game: Game = Game::new("Player 1".to_string(), "Player 2".to_string());
         game.initialize();
+
+        game.test_moves();
     }
 }

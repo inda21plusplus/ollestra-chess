@@ -32,14 +32,6 @@ impl Game {
         return true;
     }
 
-    pub fn test_moves(&mut self, square: Square) -> Vec<i8> {
-        self.board.straight_moves(square)
-    }
-
-    pub fn test_moves_2(&mut self, square: Square) -> Vec<i8> {
-        self.board.askew_moves(square)
-    }
-
     //Remove whole board AKA flip the table.
     pub fn rage(&mut self) {
         self.board._reset();
