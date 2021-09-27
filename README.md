@@ -2,7 +2,7 @@
 
 ## OBS
 
-Biblioteket är inte helt klart ännu. Funktioner som saknar är följade:
+Biblioteket är inte helt klart ännu. Funktioner som saknas är följade:
 
 - Pinnade pjäser
 - Rockad
