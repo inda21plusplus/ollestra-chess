@@ -5,21 +5,22 @@ use bitflags::bitflags;
 bitflags! {}
 
 pub(crate) enum Piece {
-    None = 0,   // 00000
-    Pawn = 1,   // 00001  --> MOVES
-    Rook = 2,   // 00010  --> MOVES
-    Knight = 3, // 00011  --> KLAR
-    Bishop = 4, // 00100  --> KLAR
-    Queen = 5,  // 00101  --> KLAR
-    King = 6,   // 00110  --> MOVES
-    White = 8,  // 01000
-    Black = 16, // 10000
+    None = 0,    // 000000
+    Pawn = 1,    // 000001  --> MOVES
+    Rook = 2,    // 000010  --> KLAR
+    Knight = 3,  // 000011  --> KLAR
+    Bishop = 4,  // 000100  --> KLAR
+    Queen = 5,   // 000101  --> KLAR
+    King = 6,    // 000110  --> MOVES
+    White = 8,   // 001000
+    Black = 16,  // 010000
+    Pinned = 32, // 100000
 }
 
 /*
     Examples:
-        Pawn | White = 00001 | 01000 = 01001 => "White Pawn"
-        King | Black = 00110 | 10000 = 10110 => "Black King"
+        Pawn | White = 000001 | 001000 = 001001 => "White Pawn"
+        King | Black = 000110 | 010000 = 010110 => "Black King"
 */
 
 impl Default for Piece {
@@ -29,9 +30,11 @@ impl Default for Piece {
 }
 
 impl Piece {
+    pub const PIECE_MASK: i8 = 7;
     const WHITE_MASK: i8 = 8;
     const BLACK_MASK: i8 = 16;
     const COLOR_MASK: i8 = 8 | 16;
+    const PINNNED_MASK: i8 = 32;
 
     pub fn none() -> i8 {
         Piece::None as i8
@@ -93,6 +96,10 @@ impl Piece {
         Piece::Black as i8
     }
 
+    pub fn pinned() -> i8 {
+        Piece::Pinned as i8
+    }
+
     pub fn get_color(piece: i8) -> i8 {
         piece & Piece::COLOR_MASK
     }
@@ -101,8 +108,12 @@ impl Piece {
         Self::bit_swap(piece & Piece::COLOR_MASK, 3, 4)
     }
 
-    pub fn cmp_color(piece1: i8, color: i8) -> bool {
-        piece1 & Piece::COLOR_MASK == color
+    pub fn cmp_color(piece: i8, color: i8) -> bool {
+        piece & Piece::COLOR_MASK == color
+    }
+
+    pub fn is_pinned(piece: i8) -> bool {
+        piece & (1 << 6) != 0
     }
 
     // https://www.geeksforgeeks.org/how-to-swap-two-bits-in-a-given-integer/

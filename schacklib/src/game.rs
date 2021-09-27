@@ -32,6 +32,14 @@ impl Game {
         return true;
     }
 
+    pub fn get_moves(&mut self) -> [Vec<i8>; 64] {
+        self.board.calculate_all_moves()
+    }
+
+    pub fn test_moves(&mut self) {
+        self.board.calculate_all_moves();
+    }
+
     //Remove whole board AKA flip the table.
     pub fn rage(&mut self) {
         self.board._reset();
