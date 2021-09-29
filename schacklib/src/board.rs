@@ -35,13 +35,7 @@ impl Board {
 
     pub fn init(&mut self) {
         // Starting pieces
-        //self.squares = FenParser::decode(FenParser::STARTING_POSITION.to_string());
-
-        self.squares[3] = Piece::king(true);
-        self.squares[11] = Piece::rook(true);
-
-        self.squares[35] = Piece::rook(false);
-        self.squares[53] = Piece::king(false);
+        self.squares = FenParser::decode(FenParser::STARTING_POSITION.to_string());
 
         // Calculate closest edge
         self.calulate_edges();
