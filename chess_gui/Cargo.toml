@@ -1,0 +1,13 @@
+[package]
+name = "chess_gui"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ggez = "0.6.1"
+#gtk4 = "0.3.0"
+#gdk-pixbuf = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "gdk-pixbuf" }
+
+chess = { path = "../schacklib" }
