@@ -9,5 +9,7 @@ edition = "2018"
 ggez = "0.6.1"
 #gtk4 = "0.3.0"
 #gdk-pixbuf = { git = "https://github.com/gtk-rs/gtk-rs-core.git", package = "gdk-pixbuf" }
+futures = "0.3.0"
+async-std = "1"
 
 chess = { path = "../schacklib" }

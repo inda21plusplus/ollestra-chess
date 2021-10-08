@@ -1,0 +1,21 @@
+
+Chess GUI - separate window and chess graphics.
+Put network stuff in separate file.
+main file runs window.
+
+Normal mode. Offline. 
+
+GUI includes chess piece board. Can we translate this to fen notation directly? (would be interesting if we could use the fen parser)
+
+Boards are kept separate on server and on client. Moves are verified on both sides. After both have verified, the piece is moved on both sides, so its more of a peer-to-peer structure, but one side connects to the other.
+
+player logic is implemented in network settings
+
+
+All of this is essentially the same as before except it awaits network input every second move
+
+
+
+Today:
+Set up server and make it accept input
+

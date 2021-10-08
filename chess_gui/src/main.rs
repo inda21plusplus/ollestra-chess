@@ -1,12 +1,46 @@
-use chess;
 use ggez;
-use ggez::event::{self, EventHandler, MouseButton};
-use ggez::graphics;
-use ggez::graphics::{Image, Mesh};
-use ggez::{Context, ContextBuilder, GameResult};
+use ggez::event;
+use ggez::{ContextBuilder, GameResult};
+use std::env;
+use std::io;
+use std::io::prelude::*;
+use std::io::{BufReader, BufWriter};
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread;
 //use glam::*;
+const IP: &str = "127.0.0.1";
+const PORT: &str = "1337";
 
-fn main() -> GameResult<()> {
+mod chess_graphics;
+use chess_graphics::ChessGame;
+
+mod chess_graphics_multi;
+mod network;
+
+struct GameSettings {
+    mode: &'static str,
+}
+
+fn main() {
+    let mut args: Vec<String> = env::args().collect();
+    if args.len() <= 3 {
+        args.push("temp".to_owned());
+        if args.len() <= 2 {
+            args.push("temp".to_owned());
+        }
+    }
+    println!("{:?}, length: {}", args, args.len());
+
+    let settings: GameSettings = match (args[1].as_str(), args[2].as_str()) {
+        ("--multi", "--client") => GameSettings { mode: "client" },
+        ("--multi", _) => GameSettings { mode: "server" },
+        (_, _) => GameSettings { mode: "single" },
+    };
+
+    //define application window
     let resolution = ggez::conf::WindowMode::default().dimensions(800., 800.);
     let (mut context, event_loop) = ContextBuilder::new("chess", "Daniel Tottie")
         .window_mode(resolution)
@@ -14,189 +48,82 @@ fn main() -> GameResult<()> {
         .build()
         .expect("error");
 
-    let chess_game = ChessGame::new(&mut context);
+    //launch GUI in desired mode
+    if settings.mode == "server" {
+        let (sender, receiver): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
+        let (response, responder): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
 
-    event::run(context, event_loop, chess_game)
-}
+        thread::spawn(move || {
+            let listener = TcpListener::bind(format!("{}:{}", IP, PORT)).unwrap();
+            let sender = Arc::new(Mutex::new(sender));
+            for stream in listener.incoming() {
+                println!("check");
+                let mut stream = stream.unwrap();
+                let mut stream_clone = Arc::new(Mutex::new(&stream));
 
-struct Selection {
-    selection: bool,
-    x: usize,
-    y: usize,
-}
-impl Selection {
-    fn new() -> Selection {
-        let selection = false;
-        let x = 0;
-        let y = 0;
-        Selection { selection, x, y }
-    }
-}
+                // for message in network::read_connection(&mut stream) {
+                //     sx.lock().unwrap().send(message.to_string()).unwrap();
+                // }
+                let buffer = BufReader::new(&stream);
+                let mut buffer_split = buffer.split(b';');
+                println!("checkpoint1");
+                let pmove = responder.recv();
+                while let Some(inc_message) = buffer_split.next() {
+                    println!("checkpoint 2");
+                    //let pmove = responder.recv();
+                    let inc_message = String::from_utf8_lossy(&inc_message.unwrap()).to_string();
+                    let inc_message = inc_message.replace('\n', "");
 
-struct ChessGame {
-    game: chess::game::Game,
-    graphics_board: [[graphics::Color; 8]; 8],
-    graphics_pieces: [[String; 8]; 8],
-    selection: Selection,
-    update: bool,
-    window: bool,
-}
+                    if !inc_message.starts_with("init") {
+                        let sx = Arc::clone(&sender);
+                        let _transmit = sx.lock().unwrap().send(inc_message);
+                        drop(sx);
+                        continue;
+                        let pmove = responder.recv();
+                        let pmove = pmove.unwrap();
+                        println!("the following was sent to the client: {}", pmove);
+                        stream_clone.lock().unwrap().write(pmove.as_bytes());
+                    }
 
-impl ChessGame {
-    pub fn new(context: &mut Context) -> ChessGame {
-        let mut game = chess::game::Game::new("player1".to_string(), "player2".to_string());
-        game.initialize();
-        let mut graphics_board = [[graphics::Color::WHITE; 8]; 8];
-        for i in 0..8 {
-            for j in 0..8 {
-                if (i % 2 == 0 && j % 2 == 0) || (i % 2 != 0 && j % 2 != 0) {
-                    graphics_board[i][j] = graphics::Color::WHITE;
-                } else {
-                    graphics_board[i][j] = graphics::Color::BLUE;
                 }
             }
-        }
-        let mut graphics_pieces: [[String; 8]; 8] = Default::default();
-        let mut graphics_pieces_str: [[&str; 8]; 8] = [
-            ["rd", "nd", "bd", "qd", "kd", "bd", "nd", "rd"],
-            ["pd", "pd", "pd", "pd", "pd", "pd", "pd", "pd"],
-            [
-                "None", "None", "None", "None", "None", "None", "None", "None",
-            ],
-            [
-                "None", "None", "None", "None", "None", "None", "None", "None",
-            ],
-            [
-                "None", "None", "None", "None", "None", "None", "None", "None",
-            ],
-            [
-                "None", "None", "None", "None", "None", "None", "None", "None",
-            ],
-            ["pl", "pl", "pl", "pl", "pl", "pl", "pl", "pl"],
-            ["rl", "nl", "bl", "ql", "kl", "bl", "nl", "rl"],
-        ];
-        for i in 0..8 {
-            for j in 0..8 {
-                graphics_pieces[i][j] = graphics_pieces_str[i][j].to_owned();
-            }
-        }
-        let selection = Selection::new();
-        let update = true;
-        let window = false;
-        ChessGame {
-            game,
-            graphics_board,
-            graphics_pieces,
-            selection,
-            update,
-            window,
-        }
+
+            //CONTINUE herebuf
+            //MAKE CODE SEND BACK A STATUS REPORT THAT A MOVE HAS BEEN MADE
+            // match responder.try_recv() {
+            //     Ok(_) => {
+            //         println!("received.");
+            //         for stream in listener.incoming() {
+            //             let mut stream = stream.unwrap();
+            //             stream.flush();
+            //             stream.write(b"update");
+            //         }
+            //     }
+            //     Err(_) => println!("did not receive anything"),
+            //     _ => print!("checkpoint 1"),
+            // }
+        });
+
+        let chess_game =
+            chess_graphics_multi::ChessGame_multi::new(&mut context, receiver, response);
+
+        event::run(context, event_loop, chess_game);
     }
-}
-
-impl EventHandler<ggez::GameError> for ChessGame {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
-        // Update code here...
-        Ok(())
+    if settings.mode == "single" {
+        let chess_game = ChessGame::new(&mut context);
+        event::run(context, event_loop, chess_game)
     }
+    if settings.mode == "client" {
+        let mut connection = TcpStream::connect("127.0.0.1:1337").unwrap();
+        connection.write(b"init:;").unwrap();
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-        if self.update == false {
-            return Ok(());
+        loop {
+            let mut input = String::new();
+            println!("input:");
+            io::stdin().read_line(&mut input).expect("woops");
+
+            connection.write_all(input.as_bytes()).unwrap();
+            //connection.flush().unwrap();
         }
-        graphics::clear(ctx, graphics::Color::from_rgb(100, 0, 100));
-        let window = graphics::Rect::new(0f32, 0f32, 1600f32, 1600f32);
-        if !self.window {
-            let width = 100f32;
-            graphics::clear(ctx, graphics::Color::from_rgb(100, 0, 100));
-            graphics::set_window_title(ctx, "Daniel's Chess");
-            //graphics::set_fullscreen(ctx, ggez::conf::FullscreenType::Desktop);
-
-            //graphics::set_fullscreen(ctx, ggez::conf::FullscreenType::True);
-            //graphics::set_fullscreen(ctx, ggez::conf::FullscreenType::True);
-            //graphics::set_screen_coordinates(ctx, window);
-        }
-
-        // Draw code here...
-        for i in 0..8 {
-            for j in 0..8 {
-                let square =
-                    graphics::Rect::new((i) as f32 * 100.0, (j) as f32 * 100.0, 100.0, 100.0);
-                let square: graphics::Mesh = graphics::Mesh::new_rectangle(
-                    ctx,
-                    graphics::DrawMode::fill(),
-                    square,
-                    self.graphics_board[i][j],
-                )?;
-                graphics::draw(ctx, &square, graphics::DrawParam::default());
-            }
-        }
-        for i in 0..8 {
-            for j in 0..8 {
-                let name = self.graphics_pieces[i][j].clone();
-                if name != "None" {
-                    let filename = ["/".to_owned(), name.to_owned(), ".png".to_owned()].join("");
-                    let piece_image = graphics::Image::new(ctx, filename);
-                    let x = 100f32 * (j) as f32;
-                    let y = 100f32 * (i) as f32;
-                    let params = graphics::DrawParam::new().dest([x, y]).scale([2.0, 2.0]);
-
-                    graphics::draw(ctx, &piece_image.unwrap(), params)?;
-                }
-            }
-        }
-
-        // let testpiece = graphics::Image::new(ctx, "bd.png") as Option<graphics::ImageGeneric>;
-        //name
-        // let indices = &[1];
-        // let piecemesh = graphics::Mesh::from_raw(ctx, &[], indices, testpiece)?;
-        // graphics::draw(ctx, &piecemesh, graphics::DrawParam::default());
-        self.update = false;
-        //graphics::set_screen_coordinates(ctx, window);
-        graphics::present(ctx)
-    }
-    fn mouse_button_down_event(&mut self, ctx: &mut Context, btn: MouseButton, x: f32, y: f32) {
-        //let letters = ["A", "B", "C", "D", "E", "F", "G", "H"];
-
-        let x = ((x as i32) / 100i32) as usize;
-        let y = ((y as i32) / 100i32) as usize;
-        if !self.selection.selection {
-            let piece = self.graphics_pieces[y as usize][x as usize].clone();
-
-            self.selection.selection = true;
-            self.selection.x = x as usize;
-            self.selection.y = y as usize;
-        } else {
-            println!(
-                "move verified with engine: {}",
-                verify_move(self, x as i8, y as i8)
-            );
-            println!(
-                "from: {},{} to {},{}",
-                self.selection.y, self.selection.x, y, x
-            );
-            if verify_move(self, x as i8, y as i8) {
-                let none = "None".to_owned();
-                self.graphics_pieces[y as usize][x as usize] =
-                    self.graphics_pieces[self.selection.y][self.selection.x].clone();
-                self.graphics_pieces[self.selection.y][self.selection.x] = none;
-                self.update = true;
-                //self.draw(ctx);
-            }
-            self.selection.selection = false;
-        }
-    }
-}
-fn verify_move(game: &mut ChessGame, x: i8, y: i8) -> bool {
-    let from = chess::square::Square::new(game.selection.y as i8, game.selection.x as i8);
-    let to = chess::square::Square::new(y as i8, x as i8);
-
-    let from2 = game.game.board.get(from);
-    let test = &game.game.board.calculate_moves(from);
-    println!("{:?}", test);
-    if test.contains(&to.to_i8()) {
-        return true;
-    } else {
-        false
     }
 }
