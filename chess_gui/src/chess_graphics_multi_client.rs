@@ -1,16 +1,20 @@
+use crate::fen_handler;
 use chess;
+use chess::fen_parser::FenParser;
 use chess::square::Square;
 use ggez;
 use ggez::event::{self, EventHandler, MouseButton};
 use ggez::graphics;
 use ggez::graphics::{Image, Mesh};
 use ggez::{Context, ContextBuilder, GameResult};
+use std::io;
 use std::io::prelude::*;
+use std::io::BufReader;
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, channel, Receiver, Sender};
 use std::thread;
 
-use crate::network::Server;
+//use crate::network::Server;
 
 const board_letters: [&str; 8] = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
@@ -36,11 +40,16 @@ pub struct ChessGame_multi {
     update: bool,
     window: bool,
     turn_white: bool,
-    stream: TcpStream,
+    receiver: Receiver<String>,
+    response: Sender<String>,
 }
 
 impl ChessGame_multi {
-    pub fn new(_context: &mut Context, receiver: Receiver<String>) -> ChessGame_multi {
+    pub fn new(
+        _context: &mut Context,
+        receiver: Receiver<String>,
+        response: Sender<String>,
+    ) -> ChessGame_multi {
         let mut game = chess::game::Game::new("player1".to_string(), "player2".to_string());
         game.initialize();
         let mut graphics_board = [[graphics::Color::WHITE; 8]; 8];
@@ -81,8 +90,7 @@ impl ChessGame_multi {
         let update = true;
         let window = false;
         let turn_white = true;
-        let mut stream = TcpStream::connect("127.0.0.1:1337").unwrap();
-        ChessGame_client {
+        ChessGame_multi {
             game,
             graphics_board,
             graphics_pieces,
@@ -90,7 +98,8 @@ impl ChessGame_multi {
             update,
             window,
             turn_white,
-            stream,
+            receiver,
+            response,
         }
     }
 }
@@ -98,6 +107,53 @@ impl ChessGame_multi {
 impl EventHandler<ggez::GameError> for ChessGame_multi {
     fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
         //Update code here...
+
+        if self.turn_white && !self.update {
+            let incoming = self.receiver.try_recv();
+            if incoming.is_err() {
+                return Ok(());
+            }
+            let incoming = incoming.unwrap();
+
+            let string = FenParser::decode(incoming[6..].to_string());
+            self.game.board.squares = string;
+            self.graphics_pieces = fen_handler::fen_parse(incoming);
+
+            //let ((from, i), (to, j)) = verify_input(&incoming).unwrap();
+
+            // let pos1 = Square::from_i8((from as i8 * 8) + i as i8);
+            // let pos2 = Square::from_i8((to as i8 * 8) + j as i8);
+            //
+            // self.game.move_piece(pos1, pos2);
+            //
+            // let none = "None".to_owned();
+            // self.graphics_pieces[to][j] = self.graphics_pieces[from][i].clone();
+            // self.graphics_pieces[from][i] = none;
+            self.update = true;
+            self.turn_white = false;
+
+            // while let Some(mssg) = bufsplit.next() {
+            //     println!("message received");
+            //     let mssg = String::from_utf8_lossy(&mssg.unwrap()).to_string();
+            //     let mssg = mssg.replace('\n', "");
+            //     if mssg.starts_with("move") {
+            //         let ((from, i), (to, j)) = verify_input(&mssg).unwrap();
+            //
+            //         let pos1 = Square::from_i8((from as i8 * 8) + i as i8);
+            //         let pos2 = Square::from_i8((to as i8 * 8) + j as i8);
+            //
+            //         self.game.move_piece(pos1, pos2);
+            //
+            //         let none = "None".to_owned();
+            //         self.graphics_pieces[to][j] = self.graphics_pieces[from][i].clone();
+            //         self.graphics_pieces[from][i] = none;
+            //         self.update = true;
+            //         self.turn_white = false;
+            //         break;
+            //     }
+            // }
+        }
+        Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
@@ -176,6 +232,15 @@ impl EventHandler<ggez::GameError> for ChessGame_multi {
                 move_piece_graphics(self, (self.selection.x, self.selection.y), (x, y));
                 //self.draw(ctx);
                 self.turn_white = true;
+                let player_move = format!(
+                    "{}{}{}{}",
+                    board_letters[self.selection.x],
+                    self.selection.y + 1,
+                    board_letters[x],
+                    y + 1
+                );
+                let message = format!("move:{}-;", player_move);
+                self.response.send(message);
             }
             self.update = true;
             self.selection.selection = false;
@@ -187,7 +252,6 @@ fn verify_move(game: &mut ChessGame_multi, x: i8, y: i8) -> bool {
     let to = (x) + (8 * y);
 
     let moves = game.game.board.calculate_all_moves();
-    println!("{:?}", moves);
     if moves[from].contains(&to) {
         game.game
             .move_piece(Square::from_i8(from as i8), Square::from_i8(to as i8));
@@ -216,37 +280,38 @@ fn draw_selection_square(ctx: &mut Context, x: usize, y: usize) -> Mesh {
     square_mesh
 }
 
-fn verify_input(input: &String) -> Result<((usize, usize), (usize, usize)), String> {
-    if input.len() < 4 {
-        return Err("false input".to_owned());
-    }
-
-    //Convertera user input till index
-    let table = ["a", "b", "c", "d", "e", "f", "g", "h"];
-    if !table.contains(&&input[0..1]) || !table.contains(&&input[2..3]) {
-        return Err("Invalid Input".to_owned());
-    }
-
-    //parse the digits and convert them to usize
-    let parsed = &input[1..2];
-    let from: usize = match parsed.parse::<usize>() {
-        Ok(value) => value.to_owned() - 1,
-        Err(error) => {
-            return Err(error.to_string());
-        }
-    };
-    //let from = from.to_owned();
-    //let from = from - 1;
-    let parsed = &input[3..4];
-    let to: usize = match parsed.parse::<usize>() {
-        Ok(value) => value.to_owned() - 1,
-        Err(error) => {
-            println!("{}", error);
-            return Err("Internal Error".to_owned());
-        }
-    };
-    //iterate digits from input
-    let i = table.iter().position(|&s| s == &input[0..1]).unwrap();
-    let j = table.iter().position(|&s| s == &input[2..3]).unwrap();
-    return Ok(((from, i), (to, j)));
-}
+// fn verify_input(input: &String) -> Result<((usize, usize), (usize, usize)), String> {
+//     if input.len() < 4 {
+//         return Err("false input".to_owned());
+//     }
+//
+//     //Convertera user input till index
+//     let table = ["a", "b", "c", "d", "e", "f", "g", "h"];
+//     println!("{},{}", &&input[7..8], &&input[9..10]);
+//     if !table.contains(&&input[7..8]) || !table.contains(&&input[9..10]) {
+//         return Err("Invalid Input".to_owned());
+//     }
+//
+//     //parse the digits and convert them to usize
+//     let parsed = &input[8..9];
+//     let from: usize = match parsed.parse::<usize>() {
+//         Ok(value) => value.to_owned() - 1,
+//         Err(error) => {
+//             return Err(error.to_string());
+//         }
+//     };
+//     //let from = from.to_owned();
+//     //let from = from - 1;
+//     let parsed = &input[10..11];
+//     let to: usize = match parsed.parse::<usize>() {
+//         Ok(value) => value.to_owned() - 1,
+//         Err(error) => {
+//             println!("{}", error);
+//             return Err("Internal Error".to_owned());
+//         }
+//     };
+//     //iterate digits from input
+//     let i = table.iter().position(|&s| s == &input[7..8]).unwrap();
+//     let j = table.iter().position(|&s| s == &input[9..10]).unwrap();
+//     return Ok(((from, i), (to, j)));
+// }

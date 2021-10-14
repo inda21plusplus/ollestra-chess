@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::piece::Piece;
 
-pub(crate) struct FenParser;
+pub struct FenParser;
 
 impl FenParser {
     pub const STARTING_POSITION: &'static str =

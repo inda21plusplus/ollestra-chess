@@ -1,16 +1,16 @@
+use crate::fen_handler;
 use chess;
 use chess::square::Square;
 use ggez;
-use ggez::event::{self, EventHandler, MouseButton};
+use ggez::event::{EventHandler, MouseButton};
 use ggez::graphics;
-use ggez::graphics::{Image, Mesh};
+use ggez::graphics::Mesh;
 use ggez::{Context, ContextBuilder, GameResult};
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, channel, Receiver, Sender};
 use std::thread;
-
-use crate::network::Server;
+//use crate::network::Server;
 
 const board_letters: [&str; 8] = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
@@ -38,6 +38,7 @@ pub struct ChessGame_multi {
     turn_white: bool,
     receiver: Receiver<String>,
     response: Sender<String>,
+    last_move: String,
 }
 
 impl ChessGame_multi {
@@ -86,6 +87,7 @@ impl ChessGame_multi {
         let update = true;
         let window = false;
         let turn_white = true;
+        let last_move = String::new();
         ChessGame_multi {
             game,
             graphics_board,
@@ -96,6 +98,7 @@ impl ChessGame_multi {
             turn_white,
             receiver,
             response,
+            last_move,
         }
     }
 }
@@ -113,19 +116,21 @@ impl EventHandler<ggez::GameError> for ChessGame_multi {
             if input.is_err() {
                 return Ok(());
             }
+            let input = input.unwrap();
+            if input.starts_with("move") {
+                let ((from, i), (to, j)) = verify_input(&input).unwrap();
 
-            let ((from, i), (to, j)) = verify_input(&input.unwrap()).unwrap();
+                let pos1 = Square::from_i8((from as i8 * 8) + i as i8);
+                let pos2 = Square::from_i8((to as i8 * 8) + j as i8);
 
-            let pos1 = Square::from_i8((from as i8 * 8) + i as i8);
-            let pos2 = Square::from_i8((to as i8 * 8) + j as i8);
+                self.game.move_piece(pos1, pos2);
 
-            self.game.move_piece(pos1, pos2);
-
-            let none = "None".to_owned();
-            self.graphics_pieces[to][j] = self.graphics_pieces[from][i].clone();
-            self.graphics_pieces[from][i] = none;
-            self.update = true;
-            self.turn_white = true;
+                let none = "None".to_owned();
+                self.graphics_pieces[to][j] = self.graphics_pieces[from][i].clone();
+                self.graphics_pieces[from][i] = none;
+                self.update = true;
+                self.turn_white = true;
+            }
         }
 
         Ok(())
@@ -207,18 +212,20 @@ impl EventHandler<ggez::GameError> for ChessGame_multi {
                 if verify_move(self, x as i8, y as i8) {
                     move_piece_graphics(self, (self.selection.x, self.selection.y), (x, y));
                     //self.draw(ctx);
-                    let response_string = format!(
-                        "{}{}{}{}-;",
-                        board_letters[self.selection.x],
-                        self.selection.y + 1,
-                        board_letters[x],
-                        y + 1
-                    );
-                    println!("{}", response_string);
+                    // let response_string = format!(
+                    //     "move::{}{}{}{}-;",
+                    //     board_letters[self.selection.x],
+                    //     self.selection.y + 1,
+                    //     board_letters[x],
+                    //     y + 1
+                    // );
+                    // println!("message sent {}", response_string);
+                    let response_string =
+                        fen_handler::to_fen(&self.graphics_pieces, "w".to_string());
+
+                    println!("sent fen string: {}", response_string);
                     let send = self.response.send(response_string);
-                    if send.is_ok() {
-                        println!("sending of message was ok");
-                    }
+
                     if send.is_err() {
                         panic!();
                     }
@@ -236,7 +243,6 @@ fn verify_move(game: &mut ChessGame_multi, x: i8, y: i8) -> bool {
     let to = (x) + (8 * y);
 
     let moves = game.game.board.calculate_all_moves();
-    println!("{:?}", moves);
     if moves[from].contains(&to) {
         game.game
             .move_piece(Square::from_i8(from as i8), Square::from_i8(to as i8));
@@ -272,13 +278,13 @@ fn verify_input(input: &String) -> Result<((usize, usize), (usize, usize)), Stri
 
     //Convertera user input till index
     let table = ["a", "b", "c", "d", "e", "f", "g", "h"];
-    println!("{},{}", &&input[0..1], &&input[2..3]);
-    if !table.contains(&&input[0..1]) || !table.contains(&&input[2..3]) {
+    println!("{},{}", &&input[5..6], &&input[7..8]);
+    if !table.contains(&&input[5..6]) || !table.contains(&&input[7..8]) {
         return Err("Invalid Input".to_owned());
     }
 
     //parse the digits and convert them to usize
-    let parsed = &input[1..2];
+    let parsed = &input[6..7];
     let from: usize = match parsed.parse::<usize>() {
         Ok(value) => value.to_owned() - 1,
         Err(error) => {
@@ -287,7 +293,7 @@ fn verify_input(input: &String) -> Result<((usize, usize), (usize, usize)), Stri
     };
     //let from = from.to_owned();
     //let from = from - 1;
-    let parsed = &input[3..4];
+    let parsed = &input[8..9];
     let to: usize = match parsed.parse::<usize>() {
         Ok(value) => value.to_owned() - 1,
         Err(error) => {
@@ -296,7 +302,7 @@ fn verify_input(input: &String) -> Result<((usize, usize), (usize, usize)), Stri
         }
     };
     //iterate digits from input
-    let i = table.iter().position(|&s| s == &input[0..1]).unwrap();
-    let j = table.iter().position(|&s| s == &input[2..3]).unwrap();
+    let i = table.iter().position(|&s| s == &input[5..6]).unwrap();
+    let j = table.iter().position(|&s| s == &input[7..8]).unwrap();
     return Ok(((from, i), (to, j)));
 }
