@@ -1,11 +1,11 @@
 #[allow(dead_code)]
-mod board;
-mod fen_parser;
-mod game;
+pub mod board;
+pub mod fen_parser;
+pub mod game;
 mod move_offset;
 mod piece;
 mod player;
-mod square;
+pub mod square;
 
 #[cfg(test)]
 mod tests {

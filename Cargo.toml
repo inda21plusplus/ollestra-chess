@@ -1,0 +1,2 @@
+[workspace]
+members = ["schacklib","chess_gui"]

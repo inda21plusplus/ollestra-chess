@@ -9,7 +9,7 @@ use std::fmt::format;
 use std::vec;
 
 #[derive(Debug)]
-pub(crate) struct Board {
+pub struct Board {
     pub squares: [i8; 64],
     pre_calc_edge: [Vec<i8>; 64],
     knight_moves: [Vec<i8>; 64],

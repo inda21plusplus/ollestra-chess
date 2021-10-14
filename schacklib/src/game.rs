@@ -5,7 +5,7 @@ use crate::square::Square;
 
 #[derive(Debug)]
 pub struct Game {
-    board: Board,
+    pub board: Board,
     players: (Player, Player),
 }
 
